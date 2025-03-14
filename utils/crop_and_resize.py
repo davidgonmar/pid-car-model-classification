@@ -14,7 +14,7 @@ def crop_car_images(input_folder="input_folder", output_folder="data/processed")
         os.makedirs(output_folder)
 
     # Cargar el modelo YOLO preentrenado
-    model = YOLO('yolov8n.pt')  # Modelo liviano y rápido
+    model = YOLO('yolov8n.pt')
 
     for filename in os.listdir(input_folder):
         if filename.endswith(('.png', '.jpg', '.jpeg')):
@@ -33,7 +33,7 @@ def crop_car_images(input_folder="input_folder", output_folder="data/processed")
                     class_name = names[int(class_id)]
 
                     # Filtrar solo vehículos
-                    if class_name in ['car', 'truck', 'bus', 'motorcycle']:
+                    if class_name in ['car', 'truck']:
                         x_min, y_min, x_max, y_max = map(int, box)
 
                         # Recortar la región del vehículo
