@@ -1,13 +1,37 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader
-from torchvision import transforms
-from pathlib import Path
+from torch.utils.data import DataLoader, Subset
+from torchvision import transforms, models
+from torchvision.datasets import StanfordCars
 from tqdm import tqdm
-import numpy as np
+import matplotlib.pyplot as plt
+import os
+from kaggle.api.kaggle_api_extended import KaggleApi
 
-from models.car_classifier import CarModelClassifier
+
+def setup_kaggle_credentials():
+    """Setup Kaggle API credentials"""
+    api = KaggleApi()
+    api.authenticate()
+    return api
+
+
+def download_dataset(api, dataset_path):
+    """Download the Stanford Cars dataset from Kaggle if not already present"""
+    # Check if dataset already exists
+    if os.path.exists(os.path.join(dataset_path, 'cars_train')):
+        print("Dataset already exists, skipping download...")
+        return
+
+    print("Downloading Stanford Cars dataset...")
+    api.dataset_download_files(
+        'rickyyyyyyy/torchvision-stanford-cars',
+        path=dataset_path,
+        unzip=True
+    )
+    print("Dataset downloaded successfully!")
+
 
 def train_model(model, train_loader, val_loader, criterion, optimizer, num_epochs=10, device='cuda'):
     """
@@ -77,31 +101,59 @@ def train_model(model, train_loader, val_loader, criterion, optimizer, num_epoch
             best_val_acc = val_acc
             torch.save(model.state_dict(), 'models/best_model.pth')
 
-if __name__ == '__main__':
+
+def main():
     # Set device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    
-    # Model parameters
-    num_classes = 10  # Update based on your dataset
-    
-    # Create model
-    model = CarModelClassifier(num_classes=num_classes)
-    
-    # Define loss function and optimizer
-    criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
-    
-    # TODO: Add your data loading and preprocessing code here
-    # Example transforms
+    print(f"Using device: {device}")
+
+    # Create necessary directories
+    os.makedirs('models', exist_ok=True)
+    dataset_path = "data"
+    os.makedirs(dataset_path, exist_ok=True)
+
+    # Setup Kaggle API and download dataset
+    api = setup_kaggle_credentials()
+    download_dataset(api, dataset_path)
+
+    # Define transforms
     transform = transforms.Compose([
         transforms.Resize((224, 224)),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406],
                            std=[0.229, 0.224, 0.225])
     ])
+
+    # Load Stanford Cars dataset
+    train_dataset = StanfordCars(
+        root=dataset_path, split='train', transform=transform, download=False
+    )
+    test_dataset = StanfordCars(
+        root=dataset_path, split='test', transform=transform, download=False
+    )
+
+    # Create subset of test data for validation
+    subset_size = 5000
+    indices = torch.randperm(len(test_dataset))[:subset_size]
+    val_dataset = Subset(test_dataset, indices)
     
-    # TODO: Create your datasets and dataloaders here
-    # train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
-    # val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False)
-    
-    print("Note: Please implement the data loading part before running the training") 
+    # Create data loaders
+    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False)
+
+    # Initialize model
+    model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
+    model.fc = nn.Linear(model.fc.in_features, 196)  # 196 classes in Stanford Cars
+    model = model.to(device)
+
+    # Define loss function and optimizer
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
+
+    # Train the model
+    train_model(model, train_loader, val_loader, criterion, optimizer, 
+                num_epochs=10, device=device)
+
+
+if __name__ == '__main__':
+    main()
