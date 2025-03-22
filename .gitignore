@@ -2,3 +2,5 @@
 data
 best_model.pth
 imagenes_descargadas
+__pycache__
+stanford_cars
