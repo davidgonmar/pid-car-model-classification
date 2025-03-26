@@ -4,6 +4,7 @@ import os
 import shutil
 import numpy as np
 from collections import defaultdict
+from PIL import Image
 
 api = KaggleApi()
 api.authenticate()
@@ -46,7 +47,10 @@ for sample in train_samples:
     new_fname = str(class_counts_train[c]).zfill(5) + '.jpg'
     src = os.path.join(train_imgpath, sample["fname"])
     dst = os.path.join(class_subdir, new_fname)
-    shutil.copy(src, dst)
+    img = Image.open(src)
+    x1, y1, x2, y2 = sample["bbox"]
+    cropped = img.crop((x1, y1, x2, y2))
+    cropped.save(dst)
     train_labels.append({"class": c, "fname": f"{c}/{new_fname}"})
 
 print("✅ Images copied successfully for training set!")
@@ -61,7 +65,10 @@ for sample in test_samples:
     new_fname = str(class_counts_test[c]).zfill(5) + '.jpg'
     src = os.path.join(test_imgpath, sample["fname"])
     dst = os.path.join(class_subdir, new_fname)
-    shutil.copy(src, dst)
+    img = Image.open(src)
+    x1, y1, x2, y2 = sample["bbox"]
+    cropped = img.crop((x1, y1, x2, y2))
+    cropped.save(dst)
     test_labels.append({"class": c, "fname": f"{c}/{new_fname}"})
 
 print("✅ Images copied successfully for test set!")

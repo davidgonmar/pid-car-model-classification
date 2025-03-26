@@ -48,8 +48,8 @@ test_dataset = CarsDataset("data", split="test", transform=data_transforms['test
 subset_size = 5000
 
 indices = torch.randperm(len(test_dataset))[:subset_size]
-test_dataloader = DataLoader(Subset(test_dataset, indices), batch_size=64)
-train_dataloader = DataLoader(train_dataset, batch_size=64, shuffle=True)
+test_dataloader = DataLoader(Subset(test_dataset, indices), batch_size=64, num_workers=4)
+train_dataloader = DataLoader(train_dataset, batch_size=64, shuffle=True, num_workers=4)
 
 
 # Freeze layers except for the last block and the fully connected layer
@@ -60,13 +60,18 @@ for name, param in resnet.named_parameters():
 # Set up the optimizer with differential learning rates:
 # - New fc layer: higher lr (e.g., 1e-3)
 # - Unfrozen pretrained layers: lower lr (e.g., 1e-4)
-optimizer = optim.AdamW([
-    {'params': resnet.fc.parameters(), 'lr': 1e-3}, # layer 3
-    {'params': [param for name, param in resnet.named_parameters()
-                if param.requires_grad and "fc" not in name and "layer3" not in name], 'lr': 1e-4}, # layer 4
-    {'params': [param for name, param in resnet.named_parameters()
-                if param.requires_grad and "fc" not in name and "layer4" not in name], 'lr': 3e-5} # layer 3
-], weight_decay=1e-4)
+USE_DIFFERENTIAL_LR = False
+
+if USE_DIFFERENTIAL_LR:
+    optimizer = optim.AdamW([
+        {'params': resnet.fc.parameters(), 'lr': 1e-3}, # layer 3
+        {'params': [param for name, param in resnet.named_parameters()
+                    if param.requires_grad and "fc" not in name and "layer3" not in name], 'lr': 1e-4}, # layer 4
+        {'params': [param for name, param in resnet.named_parameters()
+                    if param.requires_grad and "fc" not in name and "layer4" not in name], 'lr': 3e-5} # layer 3
+    ], weight_decay=1e-4)
+else:
+    optimizer = optim.AdamW(resnet.parameters(), lr=1e-3, weight_decay=1e-4)
 
 # Cosine annealing scheduler for state-of-the-art LR scheduling
 scheduler = CosineAnnealingLR(optimizer, T_max=25)
