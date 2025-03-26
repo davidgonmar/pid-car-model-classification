@@ -23,10 +23,8 @@ imagenet_std = [0.229, 0.224, 0.225]
 
 data_transforms = {
     'train': transforms.Compose([
-        transforms.Resize(256),
-        transforms.RandomRotation(degrees=15),
+        transforms.Resize((224, 224)),
         transforms.RandomPerspective(distortion_scale=0.2, p=0.5),
-        transforms.RandomResizedCrop(224, scale=(0.8, 1.0)),
         transforms.RandomHorizontalFlip(),
         transforms.ColorJitter(
             brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1
@@ -35,8 +33,7 @@ data_transforms = {
         transforms.Normalize(mean=imagenet_mean, std=imagenet_std)
     ]),   
     'test': transforms.Compose([
-        transforms.Resize(256),
-        transforms.CenterCrop(224),
+        transforms.Resize((224, 224)),
         transforms.ToTensor(),
         transforms.Normalize(mean=imagenet_mean, std=imagenet_std)
     ])
@@ -60,7 +57,7 @@ for name, param in resnet.named_parameters():
 # Set up the optimizer with differential learning rates:
 # - New fc layer: higher lr (e.g., 1e-3)
 # - Unfrozen pretrained layers: lower lr (e.g., 1e-4)
-USE_DIFFERENTIAL_LR = False
+USE_DIFFERENTIAL_LR = True
 
 if USE_DIFFERENTIAL_LR:
     optimizer = optim.AdamW([
@@ -129,26 +126,28 @@ for ep in range(100):
             test_losses.append(test_loss)
             test_accuracies.append(test_accuracy)
 
-            plt.figure(figsize=(14,5))
+            PLT = False
+            if PLT:
+                plt.figure(figsize=(14,5))
 
-            plt.subplot(1,2,1)
-            plt.plot(train_losses, marker='o', label='Train Loss')
-            plt.plot(test_losses, marker='x', label='Test Loss')
-            plt.xlabel('Interval')
-            plt.ylabel('Loss')
-            plt.title('Train and Test Loss per Interval')
-            plt.legend()
-            plt.grid(True)
+                plt.subplot(1,2,1)
+                plt.plot(train_losses, marker='o', label='Train Loss')
+                plt.plot(test_losses, marker='x', label='Test Loss')
+                plt.xlabel('Interval')
+                plt.ylabel('Loss')
+                plt.title('Train and Test Loss per Interval')
+                plt.legend()
+                plt.grid(True)
 
-            plt.subplot(1,2,2)
-            plt.plot(test_accuracies, marker='s', label='Test Accuracy')
-            plt.xlabel('Interval')
-            plt.ylabel('Accuracy (%)')
-            plt.title('Test Accuracy per Interval')
-            plt.legend()
-            plt.grid(True)
+                plt.subplot(1,2,2)
+                plt.plot(test_accuracies, marker='s', label='Test Accuracy')
+                plt.xlabel('Interval')
+                plt.ylabel('Accuracy (%)')
+                plt.title('Test Accuracy per Interval')
+                plt.legend()
+                plt.grid(True)
 
-            plt.tight_layout()
-            plt.show()
+                plt.tight_layout()
+                plt.show()
 
             print(f'Epoch [{ep+1}/100], Interval [{batch_idx}], Train Loss: {avg_train_loss:.4f}, Test Loss: {test_loss:.4f}, Test Accuracy: {test_accuracy:.2f}%')
