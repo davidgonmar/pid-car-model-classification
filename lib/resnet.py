@@ -3,6 +3,8 @@ import torch.nn as nn
 from torch import Tensor
 from typing import Type, Union, List
 import torchvision
+from lib.experiment import ExperimentConfig
+
 # -----------------------------------------------------------------------------
 # Block definitions modeled after torchvision's implementation.
 # -----------------------------------------------------------------------------
@@ -223,3 +225,26 @@ class ResNet152(ResNet):
     def __init__(self, num_classes: int = 1000, in_channels: int = 3):
         super(ResNet152, self).__init__(Bottleneck, [3, 8, 36, 3],
                                         num_classes=num_classes, in_channels=in_channels)
+
+
+
+def get_model(config: ExperimentConfig, num_classes: int = 1000, in_channels: int = 3):
+    di = {
+        'resnet18': ResNet18,
+        'resnet34': ResNet34,
+        'resnet50': ResNet50,
+        'resnet101': ResNet101,
+        'resnet152': ResNet152
+    }
+
+    if config.model_name not in di:
+        raise ValueError(f"Model {config.model_name} not supported. Choose from {list(di.keys())}")
+    
+    model_class = di[config.model_name]
+
+    ret = model_class(num_classes=num_classes, in_channels=in_channels)
+
+    if config.pretrained:
+        ret.load_pretrained()
+    return ret
+

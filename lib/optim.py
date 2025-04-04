@@ -1,14 +1,7 @@
 from torch import optim
 from torch.optim.lr_scheduler import CosineAnnealingLR
-from dataclasses import dataclass
-from models.resnet import ResNet18, ResNet34, ResNet50, ResNet101, ResNet152
+from lib.experiment import ExperimentConfig
 
-@dataclass
-class ExperimentConfig:
-    differential_lr_schedule: list
-    weight_decay: float = 1e-4
-    scheduler_t_max: int = 25
-    model_name: str = 'resnet50'
 
 def get_optimizer_and_scheduler(model, config: ExperimentConfig):
 
@@ -46,35 +39,4 @@ def fixed_lr(model, lr: float = 1e-3):
         'lr': lr
     }
 
-def get_model(config: ExperimentConfig, num_classes: int = 1000, in_channels: int = 3):
-    di = {
-        'resnet18': ResNet18,
-        'resnet34': ResNet34,
-        'resnet50': ResNet50,
-        'resnet101': ResNet101,
-        'resnet152': ResNet152
-    }
 
-    if config.model_name not in di:
-        raise ValueError(f"Model {config.model_name} not supported. Choose from {list(di.keys())}")
-    
-    model_class = di[config.model_name]
-
-    ret = model_class(num_classes=num_classes, in_channels=in_channels)
-
-    if config.pretrained:
-        ret.load_pretrained()
-    return ret
-
-
-good = ExperimentConfig(
-    differential_lr_schedule=[
-            {'params': 'layer4', 'lr': 1e-3},
-            {'params': 'layer3', 'lr': 1e-4},
-            {'params': 'fc', 'lr': 3e-5}
-        ],
-    weight_decay=1e-4,
-    scheduler_t_max=25,
-    model_name = 'resnet50',
-    pretrained = True
-)
