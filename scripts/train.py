@@ -1,22 +1,16 @@
 import torch
-import torchvision
 from utils.dataset import CarsDataset
 from torch.utils.data import DataLoader, Subset
-import torch.optim as optim
-from torch.optim.lr_scheduler import CosineAnnealingLR
-import torch.nn as nn
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 from torchvision import transforms
-
-
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-resnet = torchvision.models.resnet50(weights=torchvision.models.ResNet50_Weights.DEFAULT)
-resnet.fc = torch.nn.LazyLinear(196)
-r = resnet.to(device)
+from lib.optim import get_optimizer_and_scheduler, good, get_model
+import os
 
 torch.set_float32_matmul_precision('high')
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+resnet = get_model(good)
 
 imagenet_mean = [0.485, 0.456, 0.406]
 imagenet_std = [0.229, 0.224, 0.225]
@@ -49,32 +43,7 @@ test_dataloader = DataLoader(Subset(test_dataset, indices), batch_size=64, num_w
 train_dataloader = DataLoader(train_dataset, batch_size=64, shuffle=True, num_workers=4)
 
 
-# Freeze layers except for the last block and the fully connected layer
-for name, param in resnet.named_parameters():
-    if not ("layer4" in name or "layer3" in name or "fc" in name):
-        param.requires_grad = False
-
-# Set up the optimizer with differential learning rates:
-# - New fc layer: higher lr (e.g., 1e-3)
-# - Unfrozen pretrained layers: lower lr (e.g., 1e-4)
-USE_DIFFERENTIAL_LR = True
-
-if USE_DIFFERENTIAL_LR:
-    optimizer = optim.AdamW([
-        {'params': resnet.fc.parameters(), 'lr': 1e-3}, # layer 3
-        {'params': [param for name, param in resnet.named_parameters()
-                    if param.requires_grad and "fc" not in name and "layer3" not in name], 'lr': 1e-4}, # layer 4
-        {'params': [param for name, param in resnet.named_parameters()
-                    if param.requires_grad and "fc" not in name and "layer4" not in name], 'lr': 3e-5} # layer 3
-    ], weight_decay=1e-4)
-else:
-    optimizer = optim.AdamW(resnet.parameters(), lr=1e-3, weight_decay=1e-4)
-
-# Cosine annealing scheduler for state-of-the-art LR scheduling
-scheduler = CosineAnnealingLR(optimizer, T_max=25)
-
-criterion = nn.CrossEntropyLoss()
-
+optimizer, scheduler = get_optimizer_and_scheduler(resnet, good)
 
 def evaluate_model(model, dataloader, device):
     model.eval()
@@ -98,7 +67,8 @@ train_losses, test_losses, test_accuracies = [], [], []
 resnet.to(device)
 
 compile = True
-if compile:
+# do not compile on windows
+if compile and os.name != 'nt':
     resnet = torch.compile(resnet)
 
 interval = len(train_dataloader) // 2
