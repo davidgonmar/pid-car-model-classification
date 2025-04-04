@@ -1,352 +1,225 @@
+import torch
 import torch.nn as nn
 from torch import Tensor
-from typing import Literal
+from typing import Type, Union, List
+import torchvision
+# -----------------------------------------------------------------------------
+# Block definitions modeled after torchvision's implementation.
+# -----------------------------------------------------------------------------
 
-
+resnset = torchvision.models.resnet.ResNet
 class BasicBlock(nn.Module):
-    KERNEL_SIZE = 3
+    expansion = 1
 
-    def __init__(self, in_channels: int, out_channels: int, stride: int = 1):
+    def __init__(self, inplanes: int, planes: int, stride: int = 1, downsample: nn.Module = None):
         super(BasicBlock, self).__init__()
-        assert stride in [1, 2], "Stride should be either 1 or 2"
-        if in_channels != out_channels or stride != 1:
-            self.downsample = nn.Conv2d(
-                in_channels=in_channels,
-                out_channels=out_channels,
-                kernel_size=1,
-                stride=stride,
-                padding=0,
-            )
-        else:
-            self.downsample = None
+        self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=3, stride=stride,
+                               padding=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(planes)
+        self.relu = nn.ReLU(inplace=True)
+        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=1,
+                               padding=1, bias=False)
+        self.bn2 = nn.BatchNorm2d(planes)
+        self.downsample = downsample
+        self.stride = stride
 
-        self.conv1 = nn.Conv2d(
-            in_channels=in_channels,
-            out_channels=out_channels,
-            kernel_size=self.KERNEL_SIZE,
-            padding=1,
-            stride=1,
-        )
-        self.bn1 = nn.BatchNorm2d(num_features=out_channels)
-        self.conv2 = nn.Conv2d(
-            in_channels=out_channels,
-            out_channels=out_channels,
-            kernel_size=self.KERNEL_SIZE,
-            padding=1,
-            stride=stride,
-        )
-        self.bn2 = nn.BatchNorm2d(num_features=out_channels)
-        self.activ = nn.ReLU()
+    def forward(self, x: Tensor) -> Tensor:
+        identity = x
 
-    def forward(self, x: Tensor):
-        identity = self.downsample(x) if self.downsample is not None else x
+        out = self.conv1(x)
+        out = self.bn1(out)
+        out = self.relu(out)
 
-        x = self.activ(self.bn1(self.conv1(x)))
-        x = self.bn2(self.conv2(x))
+        out = self.conv2(out)
+        out = self.bn2(out)
 
-        x += identity
+        if self.downsample is not None:
+            identity = self.downsample(x)
 
-        x = self.activ(x)
+        out += identity
+        out = self.relu(out)
 
-        return x
+        return out
 
 
-class BottleneckBlock(nn.Module):
-    def __init__(
-        self, in_channels: int, mid_channels: int, out_channels: int, stride: int = 1
-    ):
-        super(BottleneckBlock, self).__init__()
-        assert stride in [1, 2], "Stride should be either 1 or 2"
+class Bottleneck(nn.Module):
+    expansion = 4
 
-        if in_channels != out_channels or stride != 1:
-            self.downsample = nn.Conv2d(
-                in_channels=in_channels,
-                out_channels=out_channels,
-                kernel_size=1,
-                stride=stride,
-                padding=0,
-            )
-        else:
-            self.downsample = None
+    def __init__(self, inplanes: int, planes: int, stride: int = 1, downsample: nn.Module = None):
+        super(Bottleneck, self).__init__()
+        self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(planes)
+        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=stride,
+                               padding=1, bias=False)
+        self.bn2 = nn.BatchNorm2d(planes)
+        self.conv3 = nn.Conv2d(planes, planes * self.expansion, kernel_size=1,
+                               bias=False)
+        self.bn3 = nn.BatchNorm2d(planes * self.expansion)
+        self.relu = nn.ReLU(inplace=True)
+        self.downsample = downsample
+        self.stride = stride
 
-        self.conv1 = nn.Conv2d(
-            in_channels=in_channels,
-            out_channels=mid_channels,
-            kernel_size=1,
-            padding=0,
-            stride=1,
-        )
-        self.bn1 = nn.BatchNorm2d(num_features=mid_channels)
-        self.conv2 = nn.Conv2d(
-            in_channels=mid_channels,
-            out_channels=mid_channels,
-            kernel_size=3,
-            padding=1,
-            stride=1,
-        )
-        self.bn2 = nn.BatchNorm2d(num_features=mid_channels)
-        self.conv3 = nn.Conv2d(
-            in_channels=mid_channels,
-            out_channels=out_channels,
-            kernel_size=1,
-            padding=0,
-            stride=stride,
-        )
-        self.bn3 = nn.BatchNorm2d(num_features=out_channels)
-        self.activ = nn.ReLU()
+    def forward(self, x: Tensor) -> Tensor:
+        identity = x
 
-    def forward(self, x: Tensor):
-        identity = self.downsample(x) if self.downsample is not None else x
+        out = self.conv1(x)
+        out = self.bn1(out)
+        out = self.relu(out)
 
-        x = self.activ(self.bn1(self.conv1(x)))
-        x = self.activ(self.bn2(self.conv2(x)))
-        x = self.bn3(self.conv3(x))
+        out = self.conv2(out)
+        out = self.bn2(out)
+        out = self.relu(out)
 
-        x += identity
+        out = self.conv3(out)
+        out = self.bn3(out)
 
-        x = self.activ(x)
+        if self.downsample is not None:
+            identity = self.downsample(x)
 
-        return x
+        out += identity
+        out = self.relu(out)
 
+        return out
+
+
+# -----------------------------------------------------------------------------
+# ResNet Base Class
+# -----------------------------------------------------------------------------
 
 class ResNet(nn.Module):
-    conv2_x: nn.Module
-    conv3_x: nn.Module
-    conv4_x: nn.Module
-    conv5_x: nn.Module
+    def __init__(self, block: Type[Union[BasicBlock, Bottleneck]], layers: List[int],
+                 num_classes: int = 1000, in_channels: int = 3):
+        super(ResNet, self).__init__()
+        self.inplanes = 64
 
-    def __init__(
-        self,
-        conv_out_channels: int,
-        in_channels=3,
-        num_classes=10,
-    ):
-        super(
-            ResNet,
-            self,
-        ).__init__()
-        self.conv1 = nn.Conv2d(
-            kernel_size=7, in_channels=in_channels, out_channels=64, stride=2, padding=5
-        )
-        self.max_pool = nn.MaxPool2d(kernel_size=3, stride=2)
-        self.avg_pool = nn.AdaptiveAvgPool2d((1, 1))
-        self.fc = nn.Linear(in_features=conv_out_channels, out_features=num_classes)
-        self.flatten = nn.Flatten()
+        self.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2,
+                               padding=3, bias=False)
+        self.bn1 = nn.BatchNorm2d(64)
+        self.relu = nn.ReLU(inplace=True)
+        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
-    def _make_layer(
-        self,
-        in_channels: int,
-        out_channels: int,
-        type: Literal["basic", "bottleneck"] = "basic",
-        n_blocks: int = 2,
-        mid_channels: int = None,
-    ):
+        # Residual layers
+        self.layer1 = self._make_layer(block, 64, layers[0])
+        self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
+        self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
+        self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
+
+        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+        self.fc = nn.Linear(512 * block.expansion, num_classes)
+
+    def _make_layer(self, block: Type[Union[BasicBlock, Bottleneck]], planes: int,
+                    blocks: int, stride: int = 1) -> nn.Sequential:
+        downsample = None
+        if stride != 1 or self.inplanes != planes * block.expansion:
+            downsample = nn.Sequential(
+                nn.Conv2d(self.inplanes, planes * block.expansion,
+                          kernel_size=1, stride=stride, bias=False),
+                nn.BatchNorm2d(planes * block.expansion),
+            )
+
         layers = []
-        if type == "bottleneck":
-            assert mid_channels is not None, "Should pass `mid_channels` for bottleneck"
-
-        stride = 2
-
-        if type == "basic":
-            layers.append(
-                BasicBlock(
-                    in_channels=in_channels,
-                    out_channels=out_channels,
-                    stride=stride,
-                )
-            )
-        elif type == "bottleneck":
-            layers.append(
-                BottleneckBlock(
-                    in_channels=in_channels,
-                    mid_channels=mid_channels,
-                    out_channels=out_channels,
-                    stride=stride,
-                )
-            )
-        else:
-            raise ValueError(
-                f"Unknown type of block: {type}. Should be one of 'basic' or 'bottleneck'"
-            )
-        for i in range(1, n_blocks):
-            if type == "basic":
-                layers.append(
-                    BasicBlock(
-                        in_channels=out_channels,
-                        out_channels=out_channels,
-                        stride=1,
-                    )
-                )
-            elif type == "bottleneck":
-                layers.append(
-                    BottleneckBlock(
-                        in_channels=out_channels,
-                        mid_channels=mid_channels,
-                        out_channels=out_channels,
-                        stride=1,
-                    )
-                )
-            else:
-                raise ValueError(
-                    f"Unknown type of block: {type}. Should be one of 'basic' or 'bottleneck'"
-                )
+        layers.append(block(self.inplanes, planes, stride, downsample))
+        self.inplanes = planes * block.expansion
+        for _ in range(1, blocks):
+            layers.append(block(self.inplanes, planes))
 
         return nn.Sequential(*layers)
 
-    def forward(self, x: Tensor):
+    def forward(self, x: Tensor) -> Tensor:
         x = self.conv1(x)
-        x = self.max_pool(x)
-        x = self.conv2_x(x)
-        x = self.conv3_x(x)
-        x = self.conv4_x(x)
-        x = self.conv5_x(x)
-        x = self.flatten(self.avg_pool(x))
-        return self.fc(x)
+        x = self.bn1(x)
+        x = self.relu(x)
+        x = self.maxpool(x)
 
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.layer4(x)
+
+        x = self.avgpool(x)
+        x = torch.flatten(x, 1)
+        x = self.fc(x)
+
+        return x
+
+    def load_pretrained(self):
+        """
+        Loads pretrained weights from torchvision's corresponding ResNet model.
+        The model class name (e.g. "ResNet18") is used to select the correct weights.
+        """
+        import torchvision.models as models
+
+        model_name = self.__class__.__name__.lower()  # e.g. "resnet18"
+        if model_name == "resnet18":
+            pretrained_model = models.resnet18(pretrained=True)
+        elif model_name == "resnet34":
+            pretrained_model = models.resnet34(pretrained=True)
+        elif model_name == "resnet50":
+            pretrained_model = models.resnet50(pretrained=True)
+        elif model_name == "resnet101":
+            pretrained_model = models.resnet101(pretrained=True)
+        elif model_name == "resnet152":
+            pretrained_model = models.resnet152(pretrained=True)
+        else:
+            raise ValueError(f"Pretrained weights for {model_name} are not available.")
+        
+        if self.num_classes != pretrained_model.fc.out_features:
+            # do not load the final fully connected layer
+            del pretrained_model.fc
+        self.load_state_dict(pretrained_model.state_dict(), strict=False)
+        return self
+
+    @classmethod
+    def from_pretrained(cls, num_classes: int = 1000, in_channels: int = 3):
+        """
+        Constructs the model and loads pretrained weights.
+        Note: If num_classes is different from the pretrained model (default 1000),
+        the final fc layer dimensions might not match.
+        """
+        model = cls(num_classes=num_classes, in_channels=in_channels)
+        model.load_pretrained()
+        return model
+
+    def load_from_torchvision(self, model):
+        """
+        Loads weights from a torchvision model.
+        This is useful for transferring weights from torchvision to a custom model.
+        """
+        if isinstance(model, resnset):
+            self.load_state_dict(model.state_dict(), strict=False)
+        else:
+            raise ValueError("Provided model is not a torchvision ResNet model.")
+
+
+# -----------------------------------------------------------------------------
+# ResNet Variants
+# -----------------------------------------------------------------------------
 
 class ResNet18(ResNet):
-    def __init__(self, in_channels=3, num_classes=10):
-        super(
-            ResNet18,
-            self,
-        ).__init__(512, in_channels, num_classes)
-        self.conv2_x = self._make_layer(
-            in_channels=64, out_channels=128, n_blocks=2, type="basic"
-        )
-        self.conv3_x = self._make_layer(
-            in_channels=128, out_channels=256, n_blocks=2, type="basic"
-        )
-        self.conv4_x = self._make_layer(
-            in_channels=256, out_channels=512, n_blocks=2, type="basic"
-        )
-        self.conv5_x = self._make_layer(
-            in_channels=512, out_channels=512, n_blocks=2, type="basic"
-        )
+    def __init__(self, num_classes: int = 1000, in_channels: int = 3):
+        super(ResNet18, self).__init__(BasicBlock, [2, 2, 2, 2],
+                                       num_classes=num_classes, in_channels=in_channels)
 
 
 class ResNet34(ResNet):
-    def __init__(self, in_channels=3, num_classes=10):
-        super(
-            ResNet34,
-            self,
-        ).__init__(512, in_channels, num_classes)
-        self.conv2_x = self._make_layer(
-            in_channels=64, out_channels=128, n_blocks=3, type="basic"
-        )
-        self.conv3_x = self._make_layer(
-            in_channels=128, out_channels=256, n_blocks=4, type="basic"
-        )
-        self.conv4_x = self._make_layer(
-            in_channels=256, out_channels=512, n_blocks=6, type="basic"
-        )
-        self.conv5_x = self._make_layer(
-            in_channels=512, out_channels=512, n_blocks=3, type="basic"
-        )
+    def __init__(self, num_classes: int = 1000, in_channels: int = 3):
+        super(ResNet34, self).__init__(BasicBlock, [3, 4, 6, 3],
+                                       num_classes=num_classes, in_channels=in_channels)
 
 
 class ResNet50(ResNet):
-    def __init__(self, in_channels=3, num_classes=10):
-        super(
-            ResNet50,
-            self,
-        ).__init__(2048, in_channels, num_classes)
-        self.conv2_x = self._make_layer(
-            in_channels=64,
-            mid_channels=64,
-            out_channels=256,
-            n_blocks=3,
-            type="bottleneck",
-        )
-        self.conv3_x = self._make_layer(
-            in_channels=256,
-            mid_channels=128,
-            out_channels=512,
-            n_blocks=4,
-            type="bottleneck",
-        )
-        self.conv4_x = self._make_layer(
-            in_channels=512,
-            mid_channels=256,
-            out_channels=1024,
-            n_blocks=6,
-            type="bottleneck",
-        )
-        self.conv5_x = self._make_layer(
-            in_channels=1024,
-            mid_channels=512,
-            out_channels=2048,
-            n_blocks=3,
-            type="bottleneck",
-        )
+    def __init__(self, num_classes: int = 1000, in_channels: int = 3):
+        super(ResNet50, self).__init__(Bottleneck, [3, 4, 6, 3],
+                                       num_classes=num_classes, in_channels=in_channels)
 
 
 class ResNet101(ResNet):
-    def __init__(self, in_channels=3, num_classes=10):
-        super(
-            ResNet101,
-            self,
-        ).__init__(2048, in_channels, num_classes)
-        self.conv2_x = self._make_layer(
-            in_channels=64,
-            mid_channels=64,
-            out_channels=256,
-            n_blocks=3,
-            type="bottleneck",
-        )
-        self.conv3_x = self._make_layer(
-            in_channels=256,
-            mid_channels=128,
-            out_channels=512,
-            n_blocks=4,
-            type="bottleneck",
-        )
-        self.conv4_x = self._make_layer(
-            in_channels=512,
-            mid_channels=256,
-            out_channels=1024,
-            n_blocks=23,
-            type="bottleneck",
-        )
-        self.conv5_x = self._make_layer(
-            in_channels=1024,
-            mid_channels=512,
-            out_channels=2048,
-            n_blocks=3,
-            type="bottleneck",
-        )
+    def __init__(self, num_classes: int = 1000, in_channels: int = 3):
+        super(ResNet101, self).__init__(Bottleneck, [3, 4, 23, 3],
+                                        num_classes=num_classes, in_channels=in_channels)
 
 
 class ResNet152(ResNet):
-    def __init__(self, in_channels=3, num_classes=10):
-        super(
-            ResNet152,
-            self,
-        ).__init__(2048, in_channels, num_classes)
-        self.conv2_x = self._make_layer(
-            in_channels=64,
-            mid_channels=64,
-            out_channels=256,
-            n_blocks=3,
-            type="bottleneck",
-        )
-        self.conv3_x = self._make_layer(
-            in_channels=256,
-            mid_channels=128,
-            out_channels=512,
-            n_blocks=8,
-            type="bottleneck",
-        )
-        self.conv4_x = self._make_layer(
-            in_channels=512,
-            mid_channels=256,
-            out_channels=1024,
-            n_blocks=36,
-            type="bottleneck",
-        )
-        self.conv5_x = self._make_layer(
-            in_channels=1024,
-            mid_channels=512,
-            out_channels=2048,
-            n_blocks=3,
-            type="bottleneck",
-        )
+    def __init__(self, num_classes: int = 1000, in_channels: int = 3):
+        super(ResNet152, self).__init__(Bottleneck, [3, 8, 36, 3],
+                                        num_classes=num_classes, in_channels=in_channels)
