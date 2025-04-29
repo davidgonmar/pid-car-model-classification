@@ -1,6 +1,7 @@
 import os
 import subprocess
 import time
+import sys
 
 def check_requirements():
     """Check if required packages are installed"""
@@ -31,63 +32,59 @@ def check_requirements():
     else:
         print("Todas las librerías necesarias están instaladas.")
 
-def run_visualization_scripts():
-    """Run all visualization scripts in sequence"""
-    scripts = [
-        'model_architecture.py',
-        'model_comparison.py',
-        'gradcam_visualization.py',
-        'data_augmentation.py',
-        'confusion_matrix.py'
-    ]
-    
-    print("\n=== Generando todas las visualizaciones del paper ===\n")
-    
-    for script in scripts:
-        script_path = os.path.join(os.path.dirname(__file__), script)
-        
-        if os.path.exists(script_path):
-            print(f"Ejecutando {script}...")
-            try:
-                start_time = time.time()
-                exec(open(script_path).read())
-                end_time = time.time()
-                print(f"✓ Completado en {end_time - start_time:.2f} segundos\n")
-            except Exception as e:
-                print(f"✗ Error al ejecutar {script}: {str(e)}\n")
-        else:
-            print(f"✗ No se encontró el script {script}\n")
-    
-    # List generated files
-    print("\n=== Archivos generados ===")
-    image_files = [f for f in os.listdir(os.path.dirname(__file__)) if f.endswith('.jpg')]
-    
-    if image_files:
-        for img_file in sorted(image_files):
-            file_path = os.path.join(os.path.dirname(__file__), img_file)
-            file_size = os.path.getsize(file_path) / 1024  # KB
-            print(f"{img_file} ({file_size:.1f} KB)")
-    else:
-        print("No se encontraron archivos de imagen generados.")
+def run_script(script_name):
+    """Run a Python script and report any errors"""
+    print(f"\nRunning {script_name}...")
+    try:
+        result = subprocess.run([sys.executable, script_name], 
+                               check=True, 
+                               capture_output=True, 
+                               text=True)
+        print(f"✓ {script_name} completed successfully")
+        print(result.stdout)
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"✗ Error running {script_name}:")
+        print(e.stderr)
+        return False
 
 def main():
-    """Main function"""
-    # Print header
-    print("\n" + "="*60)
-    print(" GENERADOR DE VISUALIZACIONES PARA PAPER DE CLASIFICACIÓN DE VEHÍCULOS ")
-    print("="*60 + "\n")
+    """Run all plot generation scripts"""
+    print("Starting visualization generation process")
     
-    # Check requirements
-    check_requirements()
+    # Get the current script's directory
+    script_dir = os.path.dirname(os.path.abspath(__file__))
     
-    # Run all scripts
-    run_visualization_scripts()
+    # List of scripts to run
+    scripts = [
+        "model_architecture.py",
+        "model_comparison.py", 
+        "gradcam_visualization.py",
+        "data_augmentation.py",
+        "confusion_matrix.py",
+        "yolo_resnet_comparison.py",
+        "tech_dependencies.py",
+        "data_augmentation_table.py",
+        "slide26_conclusiones.py",
+        "slide28_mejoras.py",
+        "slide30_final.py"
+    ]
     
-    # Success message
-    print("\n" + "="*60)
-    print(" ¡VISUALIZACIONES GENERADAS CORRECTAMENTE! ")
-    print(f" Ubicación: {os.path.abspath(os.path.dirname(__file__))}")
-    print("="*60 + "\n")
+    # Change to the script directory
+    os.chdir(script_dir)
+    
+    # Run each script
+    successful = 0
+    for script in scripts:
+        if run_script(script):
+            successful += 1
+    
+    # Report results
+    print(f"\nGeneration complete: {successful}/{len(scripts)} visualizations created successfully")
+    if successful == len(scripts):
+        print("All visualizations were generated successfully!")
+    else:
+        print(f"Warning: {len(scripts) - successful} script(s) had errors")
 
 if __name__ == "__main__":
     main() 

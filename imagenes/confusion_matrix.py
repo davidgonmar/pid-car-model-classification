@@ -99,7 +99,7 @@ def plot_confusion_matrix():
     # Add summary metrics
     avg_accuracy = np.mean([cm[i, i] for i in range(len(classes))])
     
-    plt.figtext(0.5, 0.01, 
+    plt.figtext(0.5, 4, 
                f"Precisión promedio: {avg_accuracy:.1f}% | Las confusiones más comunes ocurren entre clases visualmente similares.\n"
                f"Matriz generada desde el mejor modelo (ResNet50) entrenado con aumento de datos y fine-tuning.",
                ha='center', fontsize=9, style='italic')

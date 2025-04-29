@@ -1,20 +1,29 @@
 import cv2
 import os
 from ultralytics import YOLO
+import time
 
-def crop_car_images(input_folder="input_folder", output_folder="data/processed"):
+def evaluate_model(input_folder="input_folder", output_folder="data/processed", ground_truth_folder="ground_truth"):
     """
-    Recorta las imágenes para extraer solo los vehículos detectados por YOLOv8.
-    
+    Evalúa el modelo YOLO calculando precisión, exhaustividad y FPS.
+
     Args:
-        input_folder (str): Carpeta con las imágenes originales.
-        output_folder (str): Carpeta donde se guardarán las imágenes recortadas.
+        input_folder (str): Carpeta con las imágenes de entrada.
+        output_folder (str): Carpeta donde se guardarán las imágenes procesadas.
+        ground_truth_folder (str): Carpeta con las imágenes de verdad de terreno (ground truth).
     """
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
 
     # Cargar el modelo YOLO preentrenado
     model = YOLO('yolov8n.pt')
+
+    # Inicialización de contadores
+    true_positives = 0
+    false_positives = 0
+    false_negatives = 0
+    total_objects = 0
+    start_time = time.time()
 
     for filename in os.listdir(input_folder):
         if filename.endswith(('.png', '.jpg', '.jpeg')):
@@ -23,6 +32,15 @@ def crop_car_images(input_folder="input_folder", output_folder="data/processed")
 
             # Hacer la detección con YOLO
             results = model(image)
+
+            # Inicializar ground_truth_boxes como una lista vacía en caso de que no exista el archivo
+            ground_truth_boxes = []
+
+            # Cargar la ground truth si existe
+            ground_truth_path = os.path.join(ground_truth_folder, filename.replace('.jpg', '.txt'))
+            if os.path.exists(ground_truth_path):
+                with open(ground_truth_path, 'r') as f:
+                    ground_truth_boxes = [list(map(int, line.strip().split())) for line in f]
 
             for result in results:
                 boxes = result.boxes.xyxy  # Bounding boxes (x_min, y_min, x_max, y_max)
@@ -36,16 +54,30 @@ def crop_car_images(input_folder="input_folder", output_folder="data/processed")
                     if class_name in ['car', 'truck']:
                         x_min, y_min, x_max, y_max = map(int, box)
 
-                        # Recortar la región del vehículo
-                        vehicle_crop = image[y_min:y_max, x_min:x_max]
+                        # Aquí deberías calcular TP, FP y FN usando las ground truth
+                        # Implementa una forma de comparar estas cajas
 
                         # Guardar la imagen recortada
                         output_path = os.path.join(output_folder, f"{filename}_crop_{class_name}.jpg")
+                        vehicle_crop = image[y_min:y_max, x_min:x_max]
                         cv2.imwrite(output_path, vehicle_crop)
 
                         print(f"Vehículo detectado: {class_name} - Guardado en {output_path}")
 
-    print("¡Procesamiento completado!")
+            # Contar cuántos objetos hay en la imagen (ground truth)
+            total_objects += len(ground_truth_boxes)
+
+    # Calcular FPS
+    elapsed_time = time.time() - start_time
+    fps = len(os.listdir(input_folder)) / elapsed_time
+
+    # Aquí deberías calcular las métricas de precisión y exhaustividad
+    precision = true_positives / (true_positives + false_positives) if (true_positives + false_positives) > 0 else 0
+    recall = true_positives / (true_positives + false_negatives) if (true_positives + false_negatives) > 0 else 0
+
+    print(f"Precisión: {precision*100:.2f}%")
+    print(f"Exhaustividad: {recall*100:.2f}%")
+    print(f"FPS: {fps:.2f}")
 
 if __name__ == "__main__":
-    crop_car_images()
+    evaluate_model()
