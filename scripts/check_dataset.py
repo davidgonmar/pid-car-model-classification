@@ -3,12 +3,9 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 
 
-transform = transforms.Compose([
-    transforms.Resize((224, 224)),
-    transforms.ToTensor()
-])
-train = CarsDataset(root='data', split='train', transform=transform)
-test = CarsDataset(root='data', split='test', transform=transform)
+transform = transforms.Compose([transforms.Resize((224, 224)), transforms.ToTensor()])
+train = CarsDataset(root="data", split="train", transform=transform)
+test = CarsDataset(root="data", split="test", transform=transform)
 
 print(f"Number of classes: {train.num_classes}")
 print(f"Number of training samples: {train.class_meta}")

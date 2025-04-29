@@ -3,6 +3,7 @@ import torch
 import torchvision
 from lib.resnet import ResNet18, ResNet34, ResNet50, ResNet101, ResNet152
 
+
 class TestResNetVariants(unittest.TestCase):
     def setUp(self):
         self.input_tensor = torch.randn(1, 3, 224, 224)
@@ -26,7 +27,7 @@ class TestResNetVariants(unittest.TestCase):
 
         self.assertTrue(
             torch.allclose(custom_output, tv_output, atol=self.tolerance),
-            msg=f"Max diff {max_diff:.6f} exceeds tolerance {self.tolerance}"
+            msg=f"Max diff {max_diff:.6f} exceeds tolerance {self.tolerance}",
         )
 
     def test_resnet18(self):
@@ -44,5 +45,6 @@ class TestResNetVariants(unittest.TestCase):
     def test_resnet152(self):
         self.compare_outputs(ResNet152, torchvision.models.resnet152, num_classes=50)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()
