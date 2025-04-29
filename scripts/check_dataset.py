@@ -10,6 +10,9 @@ transform = transforms.Compose([
 train = CarsDataset(root='data', split='train', transform=transform)
 test = CarsDataset(root='data', split='test', transform=transform)
 
+print(f"Number of classes: {train.num_classes}")
+print(f"Number of training samples: {train.class_meta}")
+
 train_loader = DataLoader(train, batch_size=1024, shuffle=True)
 test_loader = DataLoader(test, batch_size=1024, shuffle=False)
 

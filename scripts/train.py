@@ -6,7 +6,7 @@ from tqdm import tqdm
 from torchvision import transforms
 from lib.optim import get_optimizer_and_scheduler
 from lib.resnet import get_model
-from lib.experiment import good
+from lib.experiment import get_config
 import os
 import argparse
 
@@ -15,7 +15,6 @@ torch.set_float32_matmul_precision('high')
 
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-resnet = get_model(good)
 
 imagenet_mean = [0.485, 0.456, 0.406]
 imagenet_std = [0.229, 0.224, 0.225]
@@ -23,6 +22,13 @@ imagenet_std = [0.229, 0.224, 0.225]
 
 parser = argparse.ArgumentParser(description='Train ResNet on Stanford Cars dataset')
 parser.add_argument('--plot', action='store_true', help='Plot training and test loss/accuracy')
+parser.add_argument('--experiment', type=str, default='1', help='Experiment name')
+
+
+args = parser.parse_args()
+
+config = get_config(args.experiment)
+
 
 
 args = parser.parse_args()
@@ -51,11 +57,12 @@ test_dataset = CarsDataset("data", split="test", transform=data_transforms['test
 subset_size = 5000
 
 indices = torch.randperm(len(test_dataset))[:subset_size]
-test_dataloader = DataLoader(Subset(test_dataset, indices), batch_size=64, num_workers=4)
-train_dataloader = DataLoader(train_dataset, batch_size=64, shuffle=True, num_workers=4)
+test_dataloader = DataLoader(Subset(test_dataset, indices), batch_size=64)
+train_dataloader = DataLoader(train_dataset, batch_size=64, shuffle=True)
 
+resnet = get_model(config, num_classes=train_dataset.num_classes).to(device)
 
-optimizer, scheduler = get_optimizer_and_scheduler(resnet, good)
+optimizer, scheduler = get_optimizer_and_scheduler(resnet, config)
 
 def evaluate_model(model, dataloader, device):
     model.eval()
@@ -118,30 +125,34 @@ if compile and os.name != 'nt':
 
 interval = len(train_dataloader) // 2
 
-for ep in range(100):
-    resnet.train()
-    running_loss = 0.0
-    scheduler.step()
-    for batch_idx, (data, target) in enumerate(tqdm(train_dataloader, desc=f'Epoch {ep+1}/100'), 1):
-        data, target = data.to(device), target.to(device)
-        optimizer.zero_grad()
-        output = resnet(data)
-        loss = torch.nn.functional.cross_entropy(output, target)
-        loss.backward()
-        optimizer.step()
 
-        running_loss += loss.item()
 
-        if batch_idx % interval == 0:
-            avg_train_loss = running_loss / interval
-            train_losses.append(avg_train_loss)
-            running_loss = 0.0
+if __name__ == "__main__":
+    for ep in range(100):
+        resnet.train()
+        running_loss = 0.0
+        scheduler.step()
+        for batch_idx, (data, target) in enumerate(tqdm(train_dataloader, desc=f'Epoch {ep+1}/100'), 1):
+            data, target = data.to(device), target.to(device)
+            optimizer.zero_grad()
+            output = resnet(data)
+            loss = torch.nn.functional.cross_entropy(output, target)
+            loss.backward()
+            optimizer.step()
 
-            test_loss, test_accuracy = evaluate_model(resnet, test_dataloader, device)
-            test_losses.append(test_loss)
-            test_accuracies.append(test_accuracy)
+            running_loss += loss.item()
 
-            if args.plot:
-                plot_results(train_losses, test_losses, test_accuracies)
+            if batch_idx % interval == 0:
+                avg_train_loss = running_loss / interval
+                train_losses.append(avg_train_loss)
+                running_loss = 0.0
 
-            print(f'Epoch [{ep+1}/100], Interval [{batch_idx}], Train Loss: {avg_train_loss:.4f}, Test Loss: {test_loss:.4f}, Test Accuracy: {test_accuracy:.2f}%')
+                test_loss, test_accuracy = evaluate_model(resnet, test_dataloader, device)
+                test_losses.append(test_loss)
+                test_accuracies.append(test_accuracy)
+
+                if args.plot:
+                    plot_results(train_losses, test_losses, test_accuracies)
+
+                print(f'Epoch [{ep+1}/100], Interval [{batch_idx}], Train Loss: {avg_train_loss:.4f}, Test Loss: {test_loss:.4f}, Test Accuracy: {test_accuracy:.2f}%')
+                torch.save(resnet, f'checkpoints/experiment_{args.experiment}.pth')

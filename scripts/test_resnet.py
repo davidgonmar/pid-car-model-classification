@@ -1,7 +1,7 @@
 import unittest
 import torch
 import torchvision
-from models.resnet import ResNet18, ResNet34, ResNet50, ResNet101, ResNet152
+from lib.resnet import ResNet18, ResNet34, ResNet50, ResNet101, ResNet152
 
 class TestResNetVariants(unittest.TestCase):
     def setUp(self):

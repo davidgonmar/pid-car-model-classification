@@ -108,7 +108,9 @@ class ResNet(nn.Module):
 
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self.fc = nn.Linear(512 * block.expansion, num_classes)
-
+        self.num_classes = num_classes
+        self.in_channels = in_channels
+        
     def _make_layer(self, block: Type[Union[BasicBlock, Bottleneck]], planes: int,
                     blocks: int, stride: int = 1) -> nn.Sequential:
         downsample = None
