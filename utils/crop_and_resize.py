@@ -3,9 +3,12 @@ import os
 from ultralytics import YOLO
 import time
 
-def evaluate_model(input_folder="input_folder", output_folder="data/processed", ground_truth_folder="ground_truth"):
+
+
+def crop_car_images(input_folder="input_folder", output_folder="data/processed"):
     """
-    Evalúa el modelo YOLO calculando precisión, exhaustividad y FPS.
+    Recorta las imágenes para extraer solo los vehículos detectados por YOLOv8.
+>>>>>>> de8424ac519a1e11208e91190d1bc9680bb9fbe1
 
     Args:
         input_folder (str): Carpeta con las imágenes de entrada.
@@ -16,7 +19,7 @@ def evaluate_model(input_folder="input_folder", output_folder="data/processed", 
         os.makedirs(output_folder)
 
     # Cargar el modelo YOLO preentrenado
-    model = YOLO('yolov8n.pt')
+    model = YOLO("yolov8n.pt")
 
     # Inicialización de contadores
     true_positives = 0
@@ -26,7 +29,7 @@ def evaluate_model(input_folder="input_folder", output_folder="data/processed", 
     start_time = time.time()
 
     for filename in os.listdir(input_folder):
-        if filename.endswith(('.png', '.jpg', '.jpeg')):
+        if filename.endswith((".png", ".jpg", ".jpeg")):
             image_path = os.path.join(input_folder, filename)
             image = cv2.imread(image_path)
 
@@ -51,18 +54,22 @@ def evaluate_model(input_folder="input_folder", output_folder="data/processed", 
                     class_name = names[int(class_id)]
 
                     # Filtrar solo vehículos
-                    if class_name in ['car', 'truck']:
+                    if class_name in ["car", "truck"]:
                         x_min, y_min, x_max, y_max = map(int, box)
 
                         # Aquí deberías calcular TP, FP y FN usando las ground truth
                         # Implementa una forma de comparar estas cajas
 
                         # Guardar la imagen recortada
-                        output_path = os.path.join(output_folder, f"{filename}_crop_{class_name}.jpg")
-                        vehicle_crop = image[y_min:y_max, x_min:x_max]
+
+                        output_path = os.path.join(
+                            output_folder, f"{filename}_crop_{class_name}.jpg"
+                        )
                         cv2.imwrite(output_path, vehicle_crop)
 
-                        print(f"Vehículo detectado: {class_name} - Guardado en {output_path}")
+                        print(
+                            f"Vehículo detectado: {class_name} - Guardado en {output_path}"
+                        )
 
             # Contar cuántos objetos hay en la imagen (ground truth)
             total_objects += len(ground_truth_boxes)
@@ -78,6 +85,7 @@ def evaluate_model(input_folder="input_folder", output_folder="data/processed", 
     print(f"Precisión: {precision*100:.2f}%")
     print(f"Exhaustividad: {recall*100:.2f}%")
     print(f"FPS: {fps:.2f}")
+
 
 if __name__ == "__main__":
     evaluate_model()
