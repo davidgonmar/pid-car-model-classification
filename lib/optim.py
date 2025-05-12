@@ -1,43 +1,31 @@
-from torch import optim
-from torch.optim.lr_scheduler import CosineAnnealingLR
-from lib.experiment import ExperimentConfig
+from torch.optim import AdamW
+from torch.optim.lr_scheduler import LambdaLR
 
+def get_optimizer_and_scheduler(model, config):
+    if config.lr_schedule[0]["params"]:
+        param_groups = []
+        for group in config.lr_schedule:
+            params = getattr(model, group["params"]).parameters() if group["params"] else model.parameters()
+            param_groups.append({"params": params, "lr": group["lr"]})
+    else:
+        param_groups = [{"params": model.parameters(), "lr": config.lr_schedule[0]["lr"]}]
 
-def get_optimizer_and_scheduler(model, config: ExperimentConfig):
+    for group in param_groups:
+        print(f"Group: {group['params']}, LR: {group['lr']}")
+    
+    optimizer = AdamW(param_groups, weight_decay=config.weight_decay)
 
-    for param in model.parameters():
-        param.requires_grad = False
+    total_steps = config.epochs
+    warmup_steps = int(0.1 * total_steps)
+    beta = 0.95
 
-    param_groups = []
-    matched_params = set()
+    def lr_lambda(current_epoch):
+        if current_epoch < warmup_steps:
+            return float(current_epoch) / float(max(1, warmup_steps))
+        else:
+            decay_epochs = current_epoch - warmup_steps
+            return beta ** decay_epochs
 
-    for group in config.differential_lr_schedule:
-        layer_key = group["params"]
-        lr = group["lr"]
-
-        params = [
-            param
-            for name, param in model.named_parameters()
-            if layer_key in name and param not in matched_params
-        ]
-
-        for param in params:
-            param.requires_grad = True
-            matched_params.add(param)
-
-        if params:
-            param_groups.append({"params": params, "lr": lr})
-
-    if not param_groups:
-        raise ValueError(
-            "No parameters matched the differential LR schedule. Check your config."
-        )
-
-    optimizer = optim.AdamW(param_groups, weight_decay=config.weight_decay)
-    scheduler = CosineAnnealingLR(optimizer, T_max=config.scheduler_t_max)
+    scheduler = LambdaLR(optimizer, lr_lambda=lr_lambda)
 
     return optimizer, scheduler
-
-
-def fixed_lr(model, lr: float = 1e-3):
-    return {"params": model.parameters(), "lr": lr}

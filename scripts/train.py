@@ -1,174 +1,86 @@
+import os
+import argparse
 import torch
-from utils.dataset import CarsDataset
-from torch.utils.data import DataLoader, Subset
-import matplotlib.pyplot as plt
-from tqdm import tqdm
+from torch.utils.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms
+from tqdm import tqdm
+from utils.dataset import CarsDataset
 from lib.optim import get_optimizer_and_scheduler
 from lib.resnet import get_model
 from lib.experiment import get_config
-import os
-import argparse
-
 
 torch.set_float32_matmul_precision("high")
-
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-imagenet_mean = [0.485, 0.456, 0.406]
-imagenet_std = [0.229, 0.224, 0.225]
-
-
-parser = argparse.ArgumentParser(description="Train ResNet on Stanford Cars dataset")
-parser.add_argument(
-    "--plot", action="store_true", help="Plot training and test loss/accuracy"
-)
-parser.add_argument("--experiment", type=str, default="1", help="Experiment name")
-
-
-args = parser.parse_args()
-
-config = get_config(args.experiment)
-
-
-args = parser.parse_args()
-
-data_transforms = {
-    "train": transforms.Compose(
-        [
-            transforms.Resize((224, 224)),
-            transforms.RandomPerspective(distortion_scale=0.2, p=0.5),
-            transforms.RandomHorizontalFlip(),
-            transforms.ColorJitter(
-                brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1
-            ),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=imagenet_mean, std=imagenet_std),
-        ]
-    ),
-    "test": transforms.Compose(
-        [
-            transforms.Resize((224, 224)),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=imagenet_mean, std=imagenet_std),
-        ]
-    ),
-}
-
-
-train_dataset = CarsDataset("data", split="train", transform=data_transforms["train"])
-test_dataset = CarsDataset("data", split="test", transform=data_transforms["test"])
-subset_size = 5000
-
-indices = torch.randperm(len(test_dataset))[:subset_size]
-test_dataloader = DataLoader(Subset(test_dataset, indices), batch_size=64)
-train_dataloader = DataLoader(train_dataset, batch_size=64, shuffle=True)
-
-resnet = get_model(config, num_classes=train_dataset.num_classes).to(device)
-
-optimizer, scheduler = get_optimizer_and_scheduler(resnet, config)
-
 
 def evaluate_model(model, dataloader, device):
     model.eval()
     total_loss = 0.0
     correct = 0
-
     with torch.no_grad():
         for data, target in dataloader:
             data, target = data.to(device), target.to(device)
             output = model(data)
-            total_loss += torch.nn.functional.cross_entropy(
-                output, target, reduction="sum"
-            ).item()
+            total_loss += torch.nn.functional.cross_entropy(output, target, reduction="sum").item()
             pred = output.argmax(dim=1)
             correct += pred.eq(target).sum().item()
-
     avg_loss = total_loss / len(dataloader.dataset)
     accuracy = 100.0 * correct / len(dataloader.dataset)
     return avg_loss, accuracy
 
-
-train_losses, test_losses, test_accuracies = [], [], []
-
-
-def plot_results(train_losses, test_losses, test_accuracies):
-    """
-    Plots training and test losses alongside test accuracy per interval.
-
-    Parameters:
-    - train_losses (list or array-like): Training loss values.
-    - test_losses (list or array-like): Test loss values.
-    - test_accuracies (list or array-like): Test accuracy values.
-    """
-    plt.figure(figsize=(14, 5))
-
-    # Plotting Train and Test Loss
-    plt.subplot(1, 2, 1)
-    plt.plot(train_losses, marker="o", label="Train Loss")
-    plt.plot(test_losses, marker="x", label="Test Loss")
-    plt.xlabel("Interval")
-    plt.ylabel("Loss")
-    plt.title("Train and Test Loss per Interval")
-    plt.legend()
-    plt.grid(True)
-
-    # Plotting Test Accuracy
-    plt.subplot(1, 2, 2)
-    plt.plot(test_accuracies, marker="s", label="Test Accuracy")
-    plt.xlabel("Interval")
-    plt.ylabel("Accuracy (%)")
-    plt.title("Test Accuracy per Interval")
-    plt.legend()
-    plt.grid(True)
-
-    plt.tight_layout()
-    plt.show()
-
-
-resnet.to(device)
-
-compile = True
-# do not compile on windows
-if compile and os.name != "nt":
-    resnet = torch.compile(resnet)
-
-interval = len(train_dataloader) // 2
-
-
 if __name__ == "__main__":
-    for ep in range(100):
-        resnet.train()
-        running_loss = 0.0
-        scheduler.step()
-        for batch_idx, (data, target) in enumerate(
-            tqdm(train_dataloader, desc=f"Epoch {ep+1}/100"), 1
-        ):
+    parser = argparse.ArgumentParser(description="Train ResNet on Cars Dataset")
+    parser.add_argument("--experiment", type=str, default="1")
+    parser.add_argument("--train_bs", type=int, default=128)
+    parser.add_argument("--test_bs", type=int, default=512)
+    parser.add_argument("--epochs", type=int, default=100)
+    parser.add_argument("--log_every", type=int, default=20)
+    parser.add_argument("--eval_every", type=int, default=100)
+    args = parser.parse_args()
+
+    config = get_config(args.experiment)
+    data_transforms = config.transforms
+    train_dataset = CarsDataset("data", split="train", transform=data_transforms["train"])
+    test_dataset = CarsDataset("data", split="test", transform=data_transforms["test"])
+
+    train_loader = DataLoader(train_dataset, batch_size=args.train_bs, shuffle=True)
+    test_loader = DataLoader(test_dataset, batch_size=args.test_bs, shuffle=False)
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = get_model(config, num_classes=train_dataset.num_classes).to(device)
+    optimizer, scheduler = get_optimizer_and_scheduler(model, config)
+
+    if os.name != "nt":
+        model = torch.compile(model)
+
+    writer = SummaryWriter(log_dir=f"logs/exp_{args.experiment}")
+    global_step = 0
+
+    for epoch in range(1, args.epochs + 1):
+        model.train()
+        for batch_idx, (data, target) in enumerate(tqdm(train_loader, desc=f"Epoch {epoch}/{args.epochs}"), 1):
             data, target = data.to(device), target.to(device)
             optimizer.zero_grad()
-            output = resnet(data)
+            output = model(data)
             loss = torch.nn.functional.cross_entropy(output, target)
             loss.backward()
             optimizer.step()
 
-            running_loss += loss.item()
+            global_step += 1
 
-            if batch_idx % interval == 0:
-                avg_train_loss = running_loss / interval
-                train_losses.append(avg_train_loss)
-                running_loss = 0.0
+            if batch_idx % args.log_every == 0:
+                writer.add_scalar("Train/Loss", loss.item(), global_step)
+                writer.add_scalar("Train/LR", optimizer.param_groups[0]["lr"], global_step)
+                for name, param in model.named_parameters():
+                    writer.add_scalar(f"WeightNorm/{name}", param.norm().item(), global_step)
+                    if param.grad is not None:
+                        writer.add_scalar(f"GradNorm/{name}", param.grad.norm().item(), global_step)
 
-                test_loss, test_accuracy = evaluate_model(
-                    resnet, test_dataloader, device
-                )
-                test_losses.append(test_loss)
-                test_accuracies.append(test_accuracy)
+            if batch_idx % args.eval_every == 0:
+                test_loss, test_acc = evaluate_model(model, test_loader, device)
+                writer.add_scalar("Eval/Loss", test_loss, global_step)
+                writer.add_scalar("Eval/Accuracy", test_acc, global_step)
+                print(f"Epoch {epoch}, Step {batch_idx}, Train Loss: {loss.item():.4f}, Eval Loss: {test_loss:.4f}, Eval Acc: {test_acc:.2f}%")
+                torch.save(model.state_dict(), f"checkpoints/exp_{args.experiment}.pth")
 
-                if args.plot:
-                    plot_results(train_losses, test_losses, test_accuracies)
-
-                print(
-                    f"Epoch [{ep+1}/100], Interval [{batch_idx}], Train Loss: {avg_train_loss:.4f}, Test Loss: {test_loss:.4f}, Test Accuracy: {test_accuracy:.2f}%"
-                )
-                torch.save(resnet, f"checkpoints/experiment_{args.experiment}.pth")
+        scheduler.step()
+    writer.close()

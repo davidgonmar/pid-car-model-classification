@@ -5,3 +5,5 @@ imagenes_descargadas
 __pycache__
 stanford_cars
 *.pt
+runs/
+checkpoints/
