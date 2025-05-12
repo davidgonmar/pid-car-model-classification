@@ -70,7 +70,7 @@ _1 = ExperimentConfig(
     weight_decay=1e-4,
     model_name="resnet50",
     pretrained=True,
-    epochs=30,
+    epochs=50,
 )
 
 _2 = ExperimentConfig(
@@ -83,7 +83,7 @@ _2 = ExperimentConfig(
     weight_decay=1e-4,
     model_name="resnet18",
     pretrained=True,
-    epochs=30,
+    epochs=50,
 )
 
 # No differential LR
@@ -93,7 +93,7 @@ _3 = ExperimentConfig(
     weight_decay=1e-4,
     model_name="resnet50",
     pretrained=True,
-    epochs=30,
+    epochs=50,
 )
 
 _4 = ExperimentConfig(
@@ -102,7 +102,7 @@ _4 = ExperimentConfig(
     weight_decay=1e-4,
     model_name="resnet50",
     pretrained=True,
-    epochs=30,
+    epochs=50,
 )
 
 # No data augmentation
@@ -112,7 +112,7 @@ _5 = ExperimentConfig(
     weight_decay=1e-4,
     model_name="resnet50",
     pretrained=True,
-    epochs=30,
+    epochs=50,
 )
 
 _6 = ExperimentConfig(
@@ -121,7 +121,7 @@ _6 = ExperimentConfig(
     weight_decay=1e-4,
     model_name="resnet50",
     pretrained=True,
-    epochs=30,
+    epochs=50,
 )
 
 
