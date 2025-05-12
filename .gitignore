@@ -7,3 +7,4 @@ stanford_cars
 *.pt
 runs/
 checkpoints/
+logs/

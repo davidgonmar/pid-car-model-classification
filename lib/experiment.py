@@ -15,7 +15,7 @@ class ExperimentConfig:
 transforms_data_augmentation = {
     "train": torchvision.transforms.Compose(
         [
-            torchvision.transforms.Resize(224),
+            torchvision.transforms.Resize((224, 224)),
             torchvision.transforms.RandomHorizontalFlip(p=0.5),
             torchvision.transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),
             torchvision.transforms.ToTensor(),
@@ -26,7 +26,7 @@ transforms_data_augmentation = {
     ),
     "test": torchvision.transforms.Compose(
         [
-            torchvision.transforms.Resize(224),
+            torchvision.transforms.Resize((224, 224)),
             torchvision.transforms.ToTensor(),
             torchvision.transforms.Normalize(
                 mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
@@ -38,7 +38,7 @@ transforms_data_augmentation = {
 transforms_no_data_augmentation = {
     "train": torchvision.transforms.Compose(
         [
-            torchvision.transforms.Resize(224),
+            torchvision.transforms.Resize((224, 224)),
             torchvision.transforms.ToTensor(),
             torchvision.transforms.Normalize(
                 mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
@@ -48,7 +48,7 @@ transforms_no_data_augmentation = {
 
     "test": torchvision.transforms.Compose(
         [
-            torchvision.transforms.Resize(224),
+            torchvision.transforms.Resize((224, 224)),
             torchvision.transforms.ToTensor(),
             torchvision.transforms.Normalize(
                 mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]

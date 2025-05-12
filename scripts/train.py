@@ -11,6 +11,7 @@ from lib.resnet import get_model
 from lib.experiment import get_config
 
 torch.set_float32_matmul_precision("high")
+torch.backends.cudnn.benchmark = True
 
 def evaluate_model(model, dataloader, device):
     model.eval()
@@ -32,7 +33,6 @@ if __name__ == "__main__":
     parser.add_argument("--experiment", type=str, default="1")
     parser.add_argument("--train_bs", type=int, default=128)
     parser.add_argument("--test_bs", type=int, default=512)
-    parser.add_argument("--epochs", type=int, default=100)
     parser.add_argument("--log_every", type=int, default=20)
     parser.add_argument("--eval_every", type=int, default=100)
     args = parser.parse_args()
@@ -49,15 +49,12 @@ if __name__ == "__main__":
     model = get_model(config, num_classes=train_dataset.num_classes).to(device)
     optimizer, scheduler = get_optimizer_and_scheduler(model, config)
 
-    if os.name != "nt":
-        model = torch.compile(model)
-
     writer = SummaryWriter(log_dir=f"logs/exp_{args.experiment}")
     global_step = 0
 
-    for epoch in range(1, args.epochs + 1):
+    for epoch in range(1, config.epochs + 1):
         model.train()
-        for batch_idx, (data, target) in enumerate(tqdm(train_loader, desc=f"Epoch {epoch}/{args.epochs}"), 1):
+        for batch_idx, (data, target) in enumerate(tqdm(train_loader, desc=f"Epoch {epoch}/{config.epochs}"), 1):
             data, target = data.to(device), target.to(device)
             optimizer.zero_grad()
             output = model(data)
