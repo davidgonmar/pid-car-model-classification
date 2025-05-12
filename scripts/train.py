@@ -1,11 +1,9 @@
-import os
 import argparse
 import torch
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
-from torchvision import transforms
 from tqdm import tqdm
-from utils.dataset import CarsDataset
+from lib.dataset import CarsDataset
 from lib.optim import get_optimizer_and_scheduler
 from lib.resnet import get_model
 from lib.experiment import get_config
