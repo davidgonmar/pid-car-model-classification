@@ -8,12 +8,10 @@ import time
 def crop_car_images(input_folder="input_folder", output_folder="data/processed"):
     """
     Recorta las imágenes para extraer solo los vehículos detectados por YOLOv8.
->>>>>>> de8424ac519a1e11208e91190d1bc9680bb9fbe1
 
     Args:
         input_folder (str): Carpeta con las imágenes de entrada.
         output_folder (str): Carpeta donde se guardarán las imágenes procesadas.
-        ground_truth_folder (str): Carpeta con las imágenes de verdad de terreno (ground truth).
     """
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
@@ -32,18 +30,16 @@ def crop_car_images(input_folder="input_folder", output_folder="data/processed")
         if filename.endswith((".png", ".jpg", ".jpeg")):
             image_path = os.path.join(input_folder, filename)
             image = cv2.imread(image_path)
+            
+            if image is None:
+                print(f"Error al leer la imagen: {image_path}")
+                continue
 
             # Hacer la detección con YOLO
             results = model(image)
 
             # Inicializar ground_truth_boxes como una lista vacía en caso de que no exista el archivo
             ground_truth_boxes = []
-
-            # Cargar la ground truth si existe
-            ground_truth_path = os.path.join(ground_truth_folder, filename.replace('.jpg', '.txt'))
-            if os.path.exists(ground_truth_path):
-                with open(ground_truth_path, 'r') as f:
-                    ground_truth_boxes = [list(map(int, line.strip().split())) for line in f]
 
             for result in results:
                 boxes = result.boxes.xyxy  # Bounding boxes (x_min, y_min, x_max, y_max)
@@ -56,12 +52,11 @@ def crop_car_images(input_folder="input_folder", output_folder="data/processed")
                     # Filtrar solo vehículos
                     if class_name in ["car", "truck"]:
                         x_min, y_min, x_max, y_max = map(int, box)
-
-                        # Aquí deberías calcular TP, FP y FN usando las ground truth
-                        # Implementa una forma de comparar estas cajas
-
+                        
+                        # Extraer el recorte del vehículo
+                        vehicle_crop = image[y_min:y_max, x_min:x_max]
+                        
                         # Guardar la imagen recortada
-
                         output_path = os.path.join(
                             output_folder, f"{filename}_crop_{class_name}.jpg"
                         )
@@ -76,7 +71,7 @@ def crop_car_images(input_folder="input_folder", output_folder="data/processed")
 
     # Calcular FPS
     elapsed_time = time.time() - start_time
-    fps = len(os.listdir(input_folder)) / elapsed_time
+    fps = len(os.listdir(input_folder)) / elapsed_time if elapsed_time > 0 else 0
 
     # Aquí deberías calcular las métricas de precisión y exhaustividad
     precision = true_positives / (true_positives + false_positives) if (true_positives + false_positives) > 0 else 0
@@ -88,4 +83,4 @@ def crop_car_images(input_folder="input_folder", output_folder="data/processed")
 
 
 if __name__ == "__main__":
-    evaluate_model()
+    crop_car_images()
