@@ -24,7 +24,7 @@ transforms_data_augmentation = {
             ),
         ]
     ),
-    "val": torchvision.transforms.Compose(
+    "test": torchvision.transforms.Compose(
         [
             torchvision.transforms.Resize(224),
             torchvision.transforms.ToTensor(),
@@ -46,7 +46,7 @@ transforms_no_data_augmentation = {
         ]
     ),
 
-    "val": torchvision.transforms.Compose(
+    "test": torchvision.transforms.Compose(
         [
             torchvision.transforms.Resize(224),
             torchvision.transforms.ToTensor(),
