@@ -8,3 +8,4 @@ stanford_cars
 runs/
 checkpoints/
 logs/
+node_modules/
