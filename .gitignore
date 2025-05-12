@@ -9,3 +9,4 @@ runs/
 checkpoints/
 logs/
 node_modules/
+*.pth
